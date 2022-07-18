@@ -19,7 +19,7 @@ func main() {
 	// Define a new command-line flag with the name 'addr', a default value of ":4000"
 	// and some short help text explaining what the flag controls. The value of the
 	// flag will be stored in the addr variable at runtime.
-	addr := flag.String("addr", ":4000", "HTTP network address")
+	addr := flag.String("addr", "4000", "HTTP network address")
 	// Importantly, we use the flag.Parse() function to parse the command-line flag.
 	// This reads in the command-line flag value and assigns it to the addr
 	// variable. You need to call this *before* you use the addr variable
@@ -44,29 +44,11 @@ func main() {
 		infoLog:  infoLog,
 	}
 
-	// Swap the route declarations to use the application struct's methods as the
-	// handler functions.
-	mux := http.NewServeMux()
-
-	// Create a file server which serves files out of the "./ui/static" directory.
-	// Note that the path given to the http.Dir function is relative to the project
-	// directory root.
-	fileServer := http.FileServer(http.Dir("./ui/static/"))
-
-	// Use the mux.Handle() function to register the file server as the handler for
-	// all URL paths that start with "/static/". For matching paths, we strip the
-	// "/static" prefix before the request reaches the file server.
-	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
-
-	mux.HandleFunc("/", app.home)
-	mux.HandleFunc("/snippet/view", app.snippetView)
-	mux.HandleFunc("/snippet/create", app.snippetCreate)
-
 	//Server struct
 	srv := &http.Server{
 		Addr:     *addr,
 		ErrorLog: errorLog,
-		Handler:  mux,
+		Handler:  app.routes(),
 	}
 
 	infoLog.Printf("Starting server on port %s", srv.Addr)
