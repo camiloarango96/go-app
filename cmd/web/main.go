@@ -1,10 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"log"
 	"net/http"
 	"os"
+
+	"camiloarango96.my.go.app/internal/models"
+
+	_ "github.com/go-sql-driver/mysql" // New import
 )
 
 // Define an application struct to hold the application-wide dependencies for the
@@ -13,20 +18,24 @@ import (
 type application struct {
 	errorLog *log.Logger
 	infoLog  *log.Logger
+	// Add a snippets field to the application struct. This will allow us to
+	// make the SnippetModel object available to our handlers.
+	snippets *models.SnippetModel
 }
 
 func main() {
 	// Define a new command-line flag with the name 'addr', a default value of ":4000"
 	// and some short help text explaining what the flag controls. The value of the
 	// flag will be stored in the addr variable at runtime.
-	addr := flag.String("addr", "4000", "HTTP network address")
+	addr := flag.String("addr", ":4000", "HTTP network address")
+	// Define a new command-line flag for the MySQL DSN string.
+	dsn := flag.String("dsn", "web:mypass@/snippetbox?parseTime=true", "MySQL data source name")
 	// Importantly, we use the flag.Parse() function to parse the command-line flag.
 	// This reads in the command-line flag value and assigns it to the addr
 	// variable. You need to call this *before* you use the addr variable
 	// otherwise it will always contain the default value of ":4000". If any errors are
 	// encountered during parsing the application will be terminated.
 	flag.Parse()
-
 	// Use log.New() to create a logger for writing information messages. This takes
 	// three parameters: the destination to write the logs to (os.Stdout), a string
 	// prefix for message (INFO followed by a tab), and flags to indicate what
@@ -39,9 +48,24 @@ func main() {
 	// file name and line number.
 	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
+	// To keep the main() function tidy I've put the code for creating a connection
+	// pool into the separate openDB() function below. We pass openDB() the DSN
+	// from the command-line flag.
+	db, err := openDB(*dsn)
+	if err != nil {
+		errorLog.Fatal(err)
+	}
+
+	// We also defer a call to db.Close(), so that the connection pool is closed
+	// before the main() function exits.
+	defer db.Close()
+
 	app := &application{
 		errorLog: errorLog,
 		infoLog:  infoLog,
+		// Initialize a models.SnippetModel instance and add it to the application
+		// dependencies.
+		snippets: &models.SnippetModel{DB: db},
 	}
 
 	//Server struct
@@ -52,7 +76,18 @@ func main() {
 	}
 
 	infoLog.Printf("Starting server on port %s", srv.Addr)
-	err := srv.ListenAndServe()
+	err = srv.ListenAndServe()
 	errorLog.Fatal(err)
 
+}
+
+func openDB(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, err
+	}
+	if err = db.Ping(); err != nil {
+		return nil, err
+	}
+	return db, nil
 }
